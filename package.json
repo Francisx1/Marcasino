@@ -1,0 +1,43 @@
+{
+  "name": "marcasino",
+  "version": "1.0.0",
+  "description": "Super Mario themed Web3 Casino with Chainlink VRF",
+  "main": "index.js",
+  "scripts": {
+    "install:all": "npm install && cd contracts && npm install && cd ../frontend && npm install && cd ..",
+    "node": "cd contracts && npm run node",
+    "compile": "cd contracts && npm run compile",
+    "test": "cd contracts && npm run test",
+    "test:coverage": "cd contracts && npm run test:coverage",
+    "test:gas": "cd contracts && npm run test:gas",
+    "deploy:local": "cd contracts && npm run deploy:local",
+    "deploy:sepolia": "cd contracts && npm run deploy:sepolia",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build:frontend": "cd frontend && npm run build",
+    "start:frontend": "cd frontend && npm run start",
+    "dev": "concurrently \"npm run node\" \"npm run dev:frontend\"",
+    "clean": "cd contracts && npm run clean && cd ..",
+    "lint": "cd frontend && npm run lint && cd .."
+  },
+  "keywords": [
+    "blockchain",
+    "ethereum",
+    "web3",
+    "casino",
+    "gaming",
+    "chainlink",
+    "vrf",
+    "mario",
+    "defi",
+    "smart-contracts"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Francisx1/Marcasino.git"
+  }
+}
