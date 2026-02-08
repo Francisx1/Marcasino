@@ -152,13 +152,57 @@ Create `frontend/src/contracts/addresses.json`:
 1. **Open browser:** http://localhost:3000
 2. **Connect wallet** → Select MetaMask → Connect
 3. **Switch to Hardhat Local network** in MetaMask
-4. **Play Coin Flip:**
+4. **Test Coin Flip:**
    - Click "Play Now" on Coin Flip game
    - Choose Mario (0) or Luigi (1)
    - Enter bet amount (e.g., 0.1 ETH)
-   - Confirm transaction in MetaMask
-   - Wait for VRF response (instant on local)
+   - Click "Commit Bet" → Confirm transaction
+   - Wait 120 seconds (reveal delay)
+   - Click "Reveal Bet" → Confirm transaction
+   - Click "Settle Request" → Confirm transaction
+   - **Manually fulfill VRF** (see Step 8)
    - Check if you won!
+
+5. **Test Dice Game:**
+   - Similar flow to Coin Flip with dice outcomes
+
+6. **Test Power-Up Lottery:**
+   - Click "Faucet + Deposit MCT" → Get tokens
+   - Enter ticket count (e.g., 5)
+   - Click "Buy Tickets" → Confirm transaction
+   - Wait for round to end (60 seconds locally)
+   - Click "Request Draw" → Confirm transaction
+   - **Manually fulfill VRF** (see Step 8)
+   - Click "Settle" → Confirm transaction
+   - Check if you won!
+
+---
+
+### Step 8: Manually Fulfill VRF Requests (Local Testing Only)
+
+Since local blockchain doesn't have real Chainlink VRF, you need to manually fulfill randomness requests.
+
+**Open Terminal 4:**
+
+```bash
+cd contracts
+npx hardhat run scripts/fulfill.js --network localhost
+```
+
+**If you need specific values:**
+```bash
+# With specific request ID and random word
+REQUEST_ID=1 RANDOM_WORD=12345 npx hardhat run scripts/fulfill.js --network localhost
+
+# Or use PowerShell
+$env:REQUEST_ID="1"; $env:RANDOM_WORD="12345"; npx hardhat run scripts/fulfill.js --network localhost
+```
+
+**Expected Output:**
+```
+🎲 Fulfilling VRF request...
+✅ Fulfilled request 1 with random word: 12345
+```
 
 ---
 
@@ -167,11 +211,16 @@ Create `frontend/src/contracts/addresses.json`:
 ### Basic Functionality
 - [ ] Wallet connects successfully
 - [ ] Can see contract addresses
-- [ ] Can place a bet (Coin Flip)
-- [ ] Transaction confirms
-- [ ] Balance updates after bet
+- [ ] Can commit bet (Coin Flip)
+- [ ] Can reveal bet after delay
+- [ ] Can settle request with VRF
+- [ ] Can manually fulfill VRF locally
+- [ ] Balance updates after bet/payout
 - [ ] Can play Dice Game
-- [ ] Can see game history
+- [ ] Can buy lottery tickets with MCT
+- [ ] Can request lottery draw
+- [ ] Can settle lottery with VRF
+- [ ] Can see game history and VRF links
 
 ### Treasury Management
 ```bash
@@ -216,20 +265,26 @@ npx hardhat console --network localhost
 ### ❌ VRF Request Hangs
 **Cause:** Local blockchain doesn't have real Chainlink VRF
 
-**Solution:** Use mock VRF (we need to add this):
+**Solution:** Use the built-in fulfillment script:
 
 ```bash
-# Future enhancement: Create mock VRF for testing
+# Terminal 4
+cd contracts
+npx hardhat run scripts/fulfill.js --network localhost
 ```
 
-**Workaround:** Manually call `fulfillRandomWords()` with a random number:
+**For specific requests:**
+```bash
+REQUEST_ID=1 RANDOM_WORD=12345 npx hardhat run scripts/fulfill.js --network localhost
+```
 
+**Alternative: Manual fulfillment in console:**
 ```bash
 npx hardhat console --network localhost
 
-> const game = await ethers.getContractAt("CoinFlipGame", "GAME_ADDRESS")
-> const requestId = 1 // Your VRF request ID
-> await game.fulfillRandomWords(requestId, [12345]) // Mock random number
+> const LocalVRFCoordinatorV2PlusMock = await ethers.getContractFactory("LocalVRFCoordinatorV2PlusMock")
+> const coordinator = await LocalVRFCoordinatorV2PlusMock.attach("0x5FbDB2315678afecb367f032d93F642f64180aa3")
+> await coordinator.fulfillRequest(1, 12345) // requestId, randomWord
 ```
 
 ---
@@ -303,7 +358,7 @@ Once you've tested locally and everything works:
 
 ---
 
-## 🎮 Local Testing Workflow
+## 🎮 Complete Local Testing Workflow
 
 ```
 ┌─────────────────────────────────────────────────┐
@@ -315,13 +370,21 @@ Once you've tested locally and everything works:
 │     ↓                                           │
 │  4. Connect MetaMask to Hardhat Local          │
 │     ↓                                           │
-│  5. Play & Test Games                          │
+│  5. Commit Bet (Coin Flip/Dice)                │
 │     ↓                                           │
-│  6. Make Changes → Restart & Redeploy          │
+│  6. Wait 120s → Reveal Bet                     │
 │     ↓                                           │
-│  7. Repeat Until Perfect ✨                    │
-│                                                 │
-│  8. Deploy to Sepolia 🚀                       │
+│  7. Settle Request → Get Request ID             │
+│     ↓                                           │
+│  8. Fulfill VRF (Terminal 4)                   │
+│     ↓                                           │
+│  9. Check Results → Repeat                     │
+│     ↓                                           │
+│ 10. Test Lottery (Buy → Request → Fulfill)     │
+│     ↓                                           │
+│ 11. Make Changes → Restart & Redeploy          │
+│     ↓                                           │
+│ 12. Deploy to Sepolia 🚀                       │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -331,19 +394,19 @@ Once you've tested locally and everything works:
 
 ```bash
 # Start local blockchain
-npm run node
+cd contracts && npm run node
 
-# Deploy locally
-npm run deploy:local
+# Deploy contracts locally
+cd contracts && npm run deploy:local
 
 # Run tests
-npm run test
+cd contracts && npm run test
 
 # Start frontend
-npm run dev:frontend
+cd frontend && npm run dev
 
-# Run everything at once
-npm run dev  # (blockchain + frontend)
+# Fulfill VRF requests (local testing)
+cd contracts && npx hardhat run scripts/fulfill.js --network localhost
 
 # Clean restart
 # 1. Ctrl+C all terminals

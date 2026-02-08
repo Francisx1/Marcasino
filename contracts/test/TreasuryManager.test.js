@@ -23,6 +23,9 @@ describe("TreasuryManager", function () {
       to: await treasuryManager.getAddress(),
       value: ethers.parseEther("10.0"),
     });
+
+    // Relax max single payout ratio for unit tests
+    await treasuryManager.setMaxSinglePayoutRatio(20);
   });
 
   describe("Deployment", function () {

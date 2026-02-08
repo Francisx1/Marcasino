@@ -43,39 +43,25 @@ Marcasino/
 └── package.json
 ```
 
-## 🎲 Game Options (Choose 2 for Implementation)
+## 🎲 Implemented Games
 
-### Option 1: Coin Flip (Mario vs Luigi)
+### 1. Coin Flip (Mario vs Luigi)
 - Simple binary outcome game
 - Bet on Mario (heads) or Luigi (tails)
 - Multiplier: 1.95x (5% house edge)
-- **Difficulty:** Easy to implement
+- **Features:** Commit-reveal scheme, VRF randomness, slashing deposits
 
-### Option 2: Mystery Box Dice
+### 2. Mystery Box Dice
 - Roll for multipliers (1-100)
 - Different prize tiers inspired by Mario items
 - 4 risk levels: Mushroom (1.5x), Fire Flower (10x), Star (50x), 1-Up (98x)
-- **Difficulty:** Medium
+- **Features:** Commit-reveal scheme, VRF randomness, tiered payouts
 
-### Option 3: Power-Up Lottery
+### 3. Power-Up Lottery
 - Time-based raffle system
-- Buy tickets with coins
+- Buy tickets with MCT tokens
 - Random winner selection via VRF
-- **Difficulty:** Medium
-
-### Option 4: Bowser's Castle Prediction Market
-- Binary outcome predictions
-- Community-driven betting pools
-- Time-locked resolution
-- **Difficulty:** Hard
-
-### Option 5: Toad's Card Game
-- Simplified poker/blackjack
-- Multiplayer support
-- Turn-based mechanics
-- **Difficulty:** Hard
-
-**Note:** Contracts for Options 1 & 2 are already implemented as examples. Final game selection to be determined.
+- **Features:** ERC-20 token betting, round-based draws, VRF winner selection
 
 ## 🚀 Getting Started
 
@@ -156,15 +142,16 @@ npm test
 ### Core Contracts
 
 1. **MarcasinoCore.sol** - Main casino management contract
-2. **VRFConsumerGame.sol** - Base contract for VRF integration
-3. **TreasuryManager.sol** - Betting pool and payout management
-4. **GameFactory.sol** - Factory for deploying new games
+2. **VRFConsumerGame.sol** - Base contract for VRF v2.5 integration
+3. **TreasuryManager.sol** - Betting pool and payout management with configurable risk controls
+4. **MockERC20.sol** - ERC-20 token for lottery betting (MCT)
 
 ### Game Contracts
 
-1. **CoinFlipGame.sol** - Example: Binary outcome game (Mario vs Luigi)
-2. **DiceGame.sol** - Example: Variable multiplier dice game
-3. **[TBD]** - Final game selection pending
+1. **CoinFlipGame.sol** - Binary outcome game with commit-reveal and VRF randomness
+2. **DiceGame.sol** - Variable multiplier dice game with tiered payouts
+3. **PowerUpLottery.sol** - Time-based lottery with ERC-20 token betting
+4. **LocalVRFCoordinatorV2PlusMock.sol** - Local testing VRF coordinator mock
 
 ## 🎨 Frontend Features
 
@@ -247,17 +234,18 @@ MIT License - see LICENSE file for details
 ## 🔮 Roadmap
 
 - [x] Complete smart contract architecture
-- [x] Implement example games (CoinFlip + Dice)
+- [x] Implement three games (CoinFlip, Dice, PowerUpLottery)
 - [x] Frontend development with Super Mario theme
-- [x] Basic testing suite (Core + Treasury)
-- [x] Security documentation
-- [x] Local testing guide
-- [ ] Finalize game selection (choose 2)
-- [ ] Comprehensive game testing
-- [ ] Chainlink VRF integration testing
-- [ ] Sepolia testnet deployment
-- [ ] Frontend contract integration
+- [x] Comprehensive testing suite (Core + Treasury + Games)
+- [x] Chainlink VRF v2.5 integration with local mock
+- [x] Local testing environment with VRF fulfillment
+- [x] Sepolia testnet deployment with VRF v2.5
+- [x] Configurable TreasuryManager risk controls
+- [x] ERC-20 token integration for lottery
+- [x] Frontend deployment configuration sync
+- [ ] Comprehensive frontend contract integration
 - [ ] Security audit (optional)
+- [ ] Mainnet deployment (not recommended for academic project)
 
 ## 📞 Contact
 

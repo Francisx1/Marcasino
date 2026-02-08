@@ -7,12 +7,24 @@ pragma solidity ^0.8.20;
  */
 interface ITreasuryManager {
     function processBet(address player, uint256 amount) external returns (bool);
+
+    function processTokenBet(address player, address token, uint256 amount) external returns (bool);
     
     function processPayout(
         address winner,
         uint256 amount,
         uint256 houseEdgeBps
     ) external;
+
+    function processTokenPayout(
+        address winner,
+        address token,
+        uint256 amount,
+        uint256 houseEdgeBps
+    ) external;
+
+    function refundBet(address player, uint256 amount) external;
+    function refundTokenBet(address player, address token, uint256 amount) external;
     
     function minBetAmount() external view returns (uint256);
     function maxBetAmount() external view returns (uint256);

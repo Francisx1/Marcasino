@@ -1,6 +1,7 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 
 const games = [
   {
@@ -9,7 +10,7 @@ const games = [
     subtitle: 'Mario vs Luigi',
     description: 'Pick a side and flip! 50/50 chance to double your coins.',
     icon: '🪙',
-    multiplier: '1.95x',
+    multiplier: '1.98x',
     difficulty: 'Easy',
     color: 'bg-mario-red',
   },
@@ -61,6 +62,8 @@ const itemVariants = {
 };
 
 export default function GameGrid() {
+  const router = useRouter();
+
   return (
     <section className="py-16 bg-gradient-to-b from-transparent to-black/20">
       <div className="container mx-auto px-4">
@@ -121,9 +124,14 @@ export default function GameGrid() {
               <button 
                 className={`w-full ${game.color} text-white font-pixel text-xs py-3 px-4 
                           pixel-border hover:brightness-110 transition-all`}
-                disabled={game.id > 2}
+                disabled={game.id > 3}
+                onClick={() => {
+                  if (game.id === 1) router.push('/games/coinflip');
+                  if (game.id === 2) router.push('/games/dice');
+                  if (game.id === 3) router.push('/games/lottery');
+                }}
               >
-                {game.id > 2 ? '🔒 LOCKED' : '▶️ PLAY NOW'}
+                {game.id > 3 ? '🔒 LOCKED' : '▶️ PLAY NOW'}
               </button>
 
               {/* Ribbon for featured games */}

@@ -23,6 +23,7 @@ contract TreasuryManager is AccessControl, ReentrancyGuard, Pausable {
     // Treasury settings
     uint256 public constant MIN_RESERVE_RATIO = 20; // 20% minimum reserve
     uint256 public constant MAX_SINGLE_PAYOUT_RATIO = 5; // 5% of balance max per payout
+    uint256 public maxSinglePayoutRatio;
     
     uint256 public totalBetsReceived;
     uint256 public totalPayoutsProcessed;
@@ -34,6 +35,7 @@ contract TreasuryManager is AccessControl, ReentrancyGuard, Pausable {
 
     // Player balances
     mapping(address => uint256) public playerBalances;
+    mapping(address => mapping(address => uint256)) public playerTokenBalances; // player => token => balance
     
     // Supported ERC-20 tokens
     mapping(address => bool) public supportedTokens;
@@ -42,11 +44,17 @@ contract TreasuryManager is AccessControl, ReentrancyGuard, Pausable {
     // Events
     event Deposited(address indexed player, uint256 amount);
     event Withdrawn(address indexed player, uint256 amount);
+    event TokenDeposited(address indexed player, address indexed token, uint256 amount);
+    event TokenWithdrawn(address indexed player, address indexed token, uint256 amount);
     event BetPlaced(address indexed player, address indexed game, uint256 amount);
+    event TokenBetPlaced(address indexed player, address indexed game, address indexed token, uint256 amount);
     event PayoutProcessed(address indexed player, uint256 amount, address indexed game);
+    event TokenPayoutProcessed(address indexed player, address indexed token, uint256 amount, address indexed game);
     event TokenSupported(address indexed token, bool supported);
     event BetLimitsUpdated(uint256 minBet, uint256 maxBet);
+    event MaxSinglePayoutRatioUpdated(uint256 oldRatio, uint256 newRatio);
     event HouseEarningsWithdrawn(address indexed recipient, uint256 amount);
+    event TokenHouseEarningsWithdrawn(address indexed token, address indexed recipient, uint256 amount);
 
     // Custom Errors
     error InsufficientBalance(uint256 available, uint256 required);
@@ -72,6 +80,15 @@ contract TreasuryManager is AccessControl, ReentrancyGuard, Pausable {
 
         minBetAmount = _minBet;
         maxBetAmount = _maxBet;
+
+        maxSinglePayoutRatio = MAX_SINGLE_PAYOUT_RATIO;
+    }
+
+    function setMaxSinglePayoutRatio(uint256 newRatio) external onlyRole(ADMIN_ROLE) {
+        require(newRatio > 0 && newRatio <= 100, "Invalid ratio");
+        uint256 old = maxSinglePayoutRatio;
+        maxSinglePayoutRatio = newRatio;
+        emit MaxSinglePayoutRatioUpdated(old, newRatio);
     }
 
     /**
@@ -82,6 +99,22 @@ contract TreasuryManager is AccessControl, ReentrancyGuard, Pausable {
 
         playerBalances[msg.sender] += msg.value;
         emit Deposited(msg.sender, msg.value);
+    }
+
+    /**
+     * @notice Deposit ERC-20 tokens to player balance
+     * @param token Token address
+     * @param amount Amount to deposit
+     */
+    function depositToken(address token, uint256 amount) external whenNotPaused {
+        if (!supportedTokens[token]) revert TokenNotSupported(token);
+        if (amount == 0) revert InvalidAmount();
+
+        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+        playerTokenBalances[msg.sender][token] += amount;
+        tokenBalances[token] = IERC20(token).balanceOf(address(this));
+
+        emit TokenDeposited(msg.sender, token, amount);
     }
 
     /**
@@ -100,6 +133,24 @@ contract TreasuryManager is AccessControl, ReentrancyGuard, Pausable {
         if (!success) revert TransferFailed();
 
         emit Withdrawn(msg.sender, amount);
+    }
+
+    /**
+     * @notice Withdraw ERC-20 tokens from player balance
+     * @param token Token address
+     * @param amount Amount to withdraw
+     */
+    function withdrawToken(address token, uint256 amount) external nonReentrant whenNotPaused {
+        if (!supportedTokens[token]) revert TokenNotSupported(token);
+        if (amount == 0) revert InvalidAmount();
+
+        uint256 bal = playerTokenBalances[msg.sender][token];
+        if (bal < amount) revert InsufficientBalance(bal, amount);
+
+        playerTokenBalances[msg.sender][token] = bal - amount;
+        IERC20(token).safeTransfer(msg.sender, amount);
+        tokenBalances[token] = IERC20(token).balanceOf(address(this));
+        emit TokenWithdrawn(msg.sender, token, amount);
     }
 
     /**
@@ -128,6 +179,32 @@ contract TreasuryManager is AccessControl, ReentrancyGuard, Pausable {
     }
 
     /**
+     * @notice Process a token bet from a game contract
+     * @param player Address of the player
+     * @param token Token address
+     * @param amount Bet amount
+     */
+    function processTokenBet(
+        address player,
+        address token,
+        uint256 amount
+    ) external onlyRole(GAME_ROLE) whenNotPaused returns (bool) {
+        if (!supportedTokens[token]) revert TokenNotSupported(token);
+        if (amount < minBetAmount || amount > maxBetAmount) {
+            revert BetOutOfRange(amount, minBetAmount, maxBetAmount);
+        }
+
+        uint256 bal = playerTokenBalances[player][token];
+        if (bal < amount) revert InsufficientBalance(bal, amount);
+
+        playerTokenBalances[player][token] = bal - amount;
+        totalBetsReceived += amount;
+
+        emit TokenBetPlaced(player, msg.sender, token, amount);
+        return true;
+    }
+
+    /**
      * @notice Process a payout to a winner
      * @param winner Address of the winner
      * @param amount Payout amount
@@ -145,7 +222,7 @@ contract TreasuryManager is AccessControl, ReentrancyGuard, Pausable {
         uint256 playerPayout = amount - houseAmount;
 
         // Check treasury has enough balance
-        uint256 maxPayout = (address(this).balance * MAX_SINGLE_PAYOUT_RATIO) / 100;
+        uint256 maxPayout = (address(this).balance * maxSinglePayoutRatio) / 100;
         if (playerPayout > maxPayout) {
             revert PayoutTooLarge(playerPayout, maxPayout);
         }
@@ -161,6 +238,57 @@ contract TreasuryManager is AccessControl, ReentrancyGuard, Pausable {
         totalPayoutsProcessed += playerPayout;
 
         emit PayoutProcessed(winner, playerPayout, msg.sender);
+    }
+
+    /**
+     * @notice Process a token payout to a winner
+     * @param winner Address of the winner
+     * @param token Token address
+     * @param amount Payout amount
+     * @param houseEdgeBps House edge in basis points
+     */
+    function processTokenPayout(
+        address winner,
+        address token,
+        uint256 amount,
+        uint256 houseEdgeBps
+    ) external onlyRole(GAME_ROLE) whenNotPaused nonReentrant {
+        if (!supportedTokens[token]) revert TokenNotSupported(token);
+        if (winner == address(0)) revert InvalidAddress();
+
+        uint256 houseAmount = (amount * houseEdgeBps) / 10000;
+        uint256 playerPayout = amount - houseAmount;
+
+        uint256 currentBalance = IERC20(token).balanceOf(address(this));
+        uint256 maxPayout = (currentBalance * maxSinglePayoutRatio) / 100;
+        if (playerPayout > maxPayout) revert PayoutTooLarge(playerPayout, maxPayout);
+
+        uint256 reserveRequired = (totalBetsReceived * MIN_RESERVE_RATIO) / 100;
+        if (currentBalance < reserveRequired + playerPayout) {
+            revert InsufficientTreasuryBalance(currentBalance, reserveRequired + playerPayout);
+        }
+
+        playerTokenBalances[winner][token] += playerPayout;
+        houseEarnings += houseAmount;
+        totalPayoutsProcessed += playerPayout;
+        emit TokenPayoutProcessed(winner, token, playerPayout, msg.sender);
+    }
+
+    /**
+     * @notice Refund an ETH bet back to player's balance (used for VRF timeouts)
+     */
+    function refundBet(address player, uint256 amount) external onlyRole(GAME_ROLE) whenNotPaused {
+        if (amount == 0) revert InvalidAmount();
+        playerBalances[player] += amount;
+    }
+
+    /**
+     * @notice Refund a token bet back to player's balance (used for VRF timeouts)
+     */
+    function refundTokenBet(address player, address token, uint256 amount) external onlyRole(GAME_ROLE) whenNotPaused {
+        if (!supportedTokens[token]) revert TokenNotSupported(token);
+        if (amount == 0) revert InvalidAmount();
+        playerTokenBalances[player][token] += amount;
     }
 
     /**
@@ -200,6 +328,29 @@ contract TreasuryManager is AccessControl, ReentrancyGuard, Pausable {
         if (!success) revert TransferFailed();
 
         emit HouseEarningsWithdrawn(recipient, amount);
+    }
+
+    function withdrawTokenHouseEarnings(
+        address token,
+        address recipient,
+        uint256 amount
+    ) external onlyRole(TREASURY_ROLE) nonReentrant {
+        if (!supportedTokens[token]) revert TokenNotSupported(token);
+        if (recipient == address(0)) revert InvalidAddress();
+        uint256 currentBalance = IERC20(token).balanceOf(address(this));
+        if (amount > currentBalance) {
+            revert InsufficientBalance(currentBalance, amount);
+        }
+
+        IERC20(token).safeTransfer(recipient, amount);
+        tokenBalances[token] = IERC20(token).balanceOf(address(this));
+        emit TokenHouseEarningsWithdrawn(token, recipient, amount);
+    }
+
+    function setSupportedToken(address token, bool supported) external onlyRole(ADMIN_ROLE) {
+        if (token == address(0)) revert InvalidAddress();
+        supportedTokens[token] = supported;
+        emit TokenSupported(token, supported);
     }
 
     /**

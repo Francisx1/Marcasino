@@ -1,7 +1,4 @@
 require("@nomicfoundation/hardhat-toolbox");
-require("@nomicfoundation/hardhat-verify");
-require("hardhat-gas-reporter");
-require("solidity-coverage");
 require("dotenv").config();
 
 /** @type import('hardhat/config').HardhatUserConfig */
@@ -15,40 +12,21 @@ module.exports = {
       },
     },
   },
-  
+  // --- 新增下面这部分 ---
+  paths: {
+    sources: "./src", // 告诉 Hardhat：去 src 文件夹找合约，别去 contracts 找
+  },
+  // --------------------
   networks: {
+    sepolia: {
+      url: process.env.SEPOLIA_RPC_URL || "", // 从 .env 读取 Alchemy URL
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [], // 读取私钥
+    },
     hardhat: {
       chainId: 31337,
     },
-    localhost: {
-      url: "http://127.0.0.1:8545",
-      chainId: 31337,
-    },
-    sepolia: {
-      url: process.env.SEPOLIA_RPC_URL || "",
-      accounts: process.env.PRIVATE_KEY !== undefined ? [process.env.PRIVATE_KEY] : [],
-      chainId: 11155111,
-    },
   },
-  
-  gasReporter: {
-    enabled: process.env.REPORT_GAS === "true",
-    currency: "USD",
-    outputFile: "gas-report.txt",
-    noColors: true,
-    coinmarketcap: process.env.COINMARKETCAP_API_KEY || "",
-  },
-  
   etherscan: {
-    apiKey: {
-      sepolia: process.env.ETHERSCAN_API_KEY || "",
-    },
-  },
-  
-  paths: {
-    sources: "./src",
-    tests: "./test",
-    cache: "./cache",
-    artifacts: "./artifacts",
+    apiKey: process.env.ETHERSCAN_API_KEY || "",
   },
 };
