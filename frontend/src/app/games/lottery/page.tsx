@@ -187,7 +187,7 @@ export default function LotteryPage() {
             <button className="bg-mario-yellow text-black px-4 py-2 pixel-border" onClick={faucetAndDeposit} disabled={!address}>
               Faucet + Deposit MCT
             </button>
-            <button className="bg-mario-blue px-4 py-2 pixel-border" onClick={refresh}>
+            <button className="bg-mario-blue px-4 py-2 pixel-border" onClick={() => refresh()}>
               Refresh Round
             </button>
           </div>
