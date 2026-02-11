@@ -346,7 +346,6 @@ function payout(address winner, uint256 amount) external onlyGame {
 - All game contracts
 
 **Priority 2 (Important):**
-- GameFactory.sol
 - Access control logic
 - Upgrade mechanisms
 

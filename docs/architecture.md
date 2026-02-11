@@ -251,15 +251,14 @@ For local development, Chainlink VRF doesn't auto-fulfill. Manual fulfillment re
 1. Game requests randomness → requestId = 1, 2, 3...
 2. Check Hardhat node terminal for requestId
 3. Run fulfill script:
-   npx hardhat run scripts/fulfill-vrf.js --network localhost -- <requestId>
+   REQUEST_ID=<requestId> npx hardhat run scripts/fulfill.js --network localhost
 4. LocalVRFCoordinatorV2PlusMock fulfills the request
 5. Game's fulfillRandomWords callback executed
 6. User can now reveal/settle their bet
 ```
 
 **Scripts for VRF:**
-- `scripts/fulfill-vrf.js` - Simple VRF fulfillment (recommended)
-- `scripts/fulfill.js` - Advanced VRF with custom random values
+- `scripts/fulfill.js` - Fulfill a local VRF request (supports env vars for requestId/randomWord)
 
 ### Event-Driven Updates
 
