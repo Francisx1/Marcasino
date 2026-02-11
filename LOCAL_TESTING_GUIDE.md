@@ -157,7 +157,7 @@ Create `frontend/src/contracts/addresses.json`:
    - Choose Mario (0) or Luigi (1)
    - Enter bet amount (e.g., 0.1 ETH)
    - Click "Commit Bet" → Confirm transaction
-   - Wait 120 seconds (reveal delay)
+   - Wait 120 seconds (reveal delay) **OR** run `npm run time:advance` in Terminal 4
    - Click "Reveal Bet" → Confirm transaction
    - Click "Settle Request" → Confirm transaction
    - **Manually fulfill VRF** (see Step 8)
@@ -170,7 +170,7 @@ Create `frontend/src/contracts/addresses.json`:
    - Click "Faucet + Deposit MCT" → Get tokens
    - Enter ticket count (e.g., 5)
    - Click "Buy Tickets" → Confirm transaction
-   - Wait for round to end (60 seconds locally)
+   - Wait for round to end (60 seconds locally) **OR** run `npm run time:advance 61`
    - Click "Request Draw" → Confirm transaction
    - **Manually fulfill VRF** (see Step 8)
    - Click "Settle" → Confirm transaction
@@ -259,6 +259,21 @@ npx hardhat console --network localhost
 1. Check `deployments/localhost.json` exists
 2. Copy addresses to frontend
 3. Restart frontend dev server
+
+---
+
+### ❌ "CommitmentNotReady()" Error
+**Cause:** Trying to reveal bet before 120-second delay period
+
+**Solution:** Wait 2 minutes OR use the time advancement script:
+
+```bash
+# Terminal 4 - Skip the 2-minute wait for testing
+cd contracts
+npm run time:advance
+```
+
+This advances blockchain time by 121 seconds, bypassing the reveal delay. Perfect for rapid local testing!
 
 ---
 
@@ -372,19 +387,23 @@ Once you've tested locally and everything works:
 │     ↓                                           │
 │  5. Commit Bet (Coin Flip/Dice)                │
 │     ↓                                           │
-│  6. Wait 120s → Reveal Bet                     │
+│  6. Advance Time (Terminal 4) OR Wait 120s     │
+│        npm run time:advance                    │
 │     ↓                                           │
-│  7. Settle Request → Get Request ID             │
+│  7. Reveal Bet                                 │
 │     ↓                                           │
-│  8. Fulfill VRF (Terminal 4)                   │
+│  8. Settle Request → Get Request ID             │
 │     ↓                                           │
-│  9. Check Results → Repeat                     │
+│  9. Fulfill VRF (Terminal 4)                   │
+│        npx hardhat run scripts/fulfill.js      │
 │     ↓                                           │
-│ 10. Test Lottery (Buy → Request → Fulfill)     │
+│ 10. Check Results → Repeat                     │
 │     ↓                                           │
-│ 11. Make Changes → Restart & Redeploy          │
+│ 11. Test Lottery (Buy → Request → Fulfill)     │
 │     ↓                                           │
-│ 12. Deploy to Sepolia 🚀                       │
+│ 12. Make Changes → Restart & Redeploy          │
+│     ↓                                           │
+│ 13. Deploy to Sepolia 🚀                       │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -404,6 +423,9 @@ cd contracts && npm run test
 
 # Start frontend
 cd frontend && npm run dev
+
+# Advance blockchain time (skip 2-minute wait)
+cd contracts && npm run time:advance
 
 # Fulfill VRF requests (local testing)
 cd contracts && npx hardhat run scripts/fulfill.js --network localhost
