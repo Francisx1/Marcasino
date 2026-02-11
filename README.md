@@ -123,7 +123,7 @@ npm run dev
 
 # Fulfill VRF requests manually on localhost (Terminal 4)
 cd contracts
-npx hardhat run scripts/fulfill-vrf.js --network localhost
+REQUEST_ID=1 npx hardhat run scripts/fulfill.js --network localhost
 
 # Run tests
 cd contracts
@@ -207,7 +207,7 @@ npm run verify:sepolia
 - Solidity ^0.8.20
 - Hardhat
 - OpenZeppelin Contracts
-- Chainlink VRF v2
+- Chainlink VRF v2.5
 
 **Frontend:**
 - Next.js 16.1.6 (Turbopack)
@@ -246,8 +246,8 @@ MIT License - see LICENSE file for details
 - [x] Configurable TreasuryManager risk controls
 - [x] ERC-20 token integration for lottery
 - [x] Frontend deployment configuration sync
-- [x] Comprehensive frontend contract integration
-- [x] UI cleanup and optimization
+- [ ] Comprehensive frontend contract integration
+- [ ] UI cleanup and optimization
 - [ ] Security audit (optional)
 
 ## 📞 Contact
