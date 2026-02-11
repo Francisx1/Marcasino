@@ -13,29 +13,40 @@ Marcasino is a decentralized gaming platform built on Ethereum, utilizing Chainl
 │           Smart Contract Layer              │
 ├─────────────────────────────────────────────┤
 │                                             │
-│  ┌──────────────┐      ┌─────────────────┐ │
-│  │ MarcasinoCore│◄─────┤ GameFactory     │ │
-│  └──────┬───────┘      └─────────────────┘ │
+│  ┌──────────────┐                          │
+│  │ MarcasinoCore│                          │
+│  └──────┬───────┘                          │
 │         │                                   │
-│         │  owns/manages                     │
+│         │  manages/authorizes               │
 │         │                                   │
 │  ┌──────▼───────────────────────────────┐  │
 │  │    VRFConsumerGame (Abstract)        │  │
-│  │  - requestRandomness()               │  │
+│  │  - requestRandomWords()              │  │
 │  │  - fulfillRandomWords()              │  │
 │  └──────┬───────────────────────────────┘  │
 │         │ inherits                          │
 │         │                                   │
-│  ┌──────▼────────┐    ┌─────────────────┐  │
-│  │  Game1.sol    │    │  Game2.sol      │  │
-│  │  (TBD)        │    │  (TBD)          │  │
-│  └───────────────┘    └─────────────────┘  │
+│  ┌──────▼────────┐  ┌──────────────────┐  │
+│  │  CoinFlipGame │  │   DiceGame       │  │
+│  │  (commit-     │  │   (multi-tier    │  │
+│  │   reveal)     │  │    payouts)      │  │
+│  └───────────────┘  └──────────────────┘  │
+│                                             │
+│  ┌────────────────────────────────────┐    │
+│  │   PowerUpLottery                   │    │
+│  │   (round-based, MCT tokens)        │    │
+│  └────────────────────────────────────┘    │
 │                                             │
 │  ┌──────────────────────────────────────┐  │
 │  │       TreasuryManager.sol            │  │
-│  │  - deposit()                         │  │
-│  │  - withdraw()                        │  │
-│  │  - distributePrizes()                │  │
+│  │  - depositToken()                    │  │
+│  │  - deductTokens()                    │  │
+│  │  - payoutWinnings()                  │  │
+│  └──────────────────────────────────────┘  │
+│                                             │
+│  ┌──────────────────────────────────────┐  │
+│  │       MockERC20.sol (MCT)            │  │
+│  │  - Used for lottery betting          │  │
 │  └──────────────────────────────────────┘  │
 │                                             │
 └─────────────────────────────────────────────┘
@@ -44,7 +55,8 @@ Marcasino is a decentralized gaming platform built on Ethereum, utilizing Chainl
               │
      ┌────────┴────────┐
      │ Chainlink VRF   │
-     │   Coordinator   │
+     │ Coordinator     │
+     │ (or Local Mock) │
      └─────────────────┘
 ```
 
@@ -57,32 +69,35 @@ Marcasino is a decentralized gaming platform built on Ethereum, utilizing Chainl
 │                                             │
 │  ┌──────────────────────────────────────┐  │
 │  │        Pages / App Router            │  │
-│  │  - Home                              │  │
-│  │  - Game Lobby                        │  │
-│  │  - Individual Games                  │  │
-│  │  - Leaderboard                       │  │
+│  │  - Home (/)                          │  │
+│  │  - Games Lobby (/games)              │  │
+│  │  - CoinFlip Game                     │  │
+│  │  - Dice Game                         │  │
+│  │  - Lottery Game                      │  │
 │  └────────────┬─────────────────────────┘  │
 │               │                             │
 │  ┌────────────▼─────────────────────────┐  │
 │  │      Components Layer                │  │
-│  │  - GameCard                          │  │
-│  │  - BettingPanel                      │  │
-│  │  - WalletConnect                     │  │
-│  │  - MarioTheme Components             │  │
+│  │  - Header (Navigation + Wallet)      │  │
+│  │  - Footer (Minimal)                  │  │
+│  │  - Hero (Landing page)               │  │
+│  │  - GameGrid (Game cards)             │  │
 │  └────────────┬─────────────────────────┘  │
 │               │                             │
 │  ┌────────────▼─────────────────────────┐  │
 │  │      Hooks & State Management        │  │
-│  │  - useContract                       │  │
-│  │  - useGame                           │  │
-│  │  - useWallet                         │  │
+│  │  - useAccount (Wagmi)                │  │
+│  │  - useContractRead (Wagmi)           │  │
+│  │  - useContractWrite (Wagmi)          │  │
+│  │  - useChainId                        │  │
 │  └────────────┬─────────────────────────┘  │
 │               │                             │
 │  ┌────────────▼─────────────────────────┐  │
 │  │      Web3 Integration Layer          │  │
-│  │  - ethers.js                         │  │
+│  │  - Wagmi v2 + Viem                   │  │
+│  │  - RainbowKit v2 (Wallet UI)         │  │
 │  │  - Contract ABIs                     │  │
-│  │  - Event Listeners                   │  │
+│  │  - Deployment Configs                │  │
 │  └──────────────────────────────────────┘  │
 │                                             │
 └─────────────────────────────────────────────┘
@@ -138,49 +153,113 @@ Process Result → Update State → Emit Event → Payout
 
 ### TreasuryManager Contract
 
-**Purpose:** Manage betting pools and payouts
+**Purpose:** Centralized treasury for all game funds management
 
 **Key Responsibilities:**
-- Accept deposits (ETH and ERC-20)
-- Process withdrawals
-- Calculate and distribute prizes
-- Track house edge
-- Maintain liquidity
+- Accept deposits (ETH and ERC-20 tokens including MCT)
+- Process withdrawals for players
+- Secure fund isolation (games don't hold funds directly)
+- Execute payouts on behalf of authorized games
+- Track token balances per player
+- Risk management controls
+
+**Key Features:**
+- **Security Isolation**: Game contracts don't directly hold funds
+- **Multi-token Support**: Handles ETH, MCT, and other ERC-20 tokens
+- **Role-based Access**: Only authorized games can deduct/payout
+- **Configurable Limits**: Min/max bet amounts, payout ratios
+- **Emergency Controls**: Pause functionality for security
 
 **Key Functions:**
 ```solidity
-function deposit() external payable
-function withdraw(uint256 amount) external
-function processBet(address player, uint256 amount) external returns (bool)
-function payout(address winner, uint256 amount) external
+function depositToken(address token, uint256 amount) external
+function deductTokens(address player, address token, uint256 amount) external onlyAuthorizedGame
+function payoutWinnings(address winner, uint256 amount) external onlyAuthorizedGame
+function setSupportedToken(address token, bool supported) external onlyOwner
+function setMaxSinglePayoutRatio(uint256 ratio) external onlyOwner
 ```
 
-### GameFactory Contract
+**Treasury Flow:**
+```
+Player Wallet
+   ↓ (deposit)
+TreasuryManager (secure vault)
+   ↓ (authorized deduction)
+Game Contract (processes bet)
+   ↓ (win)
+TreasuryManager (payout)
+   ↓
+Player Wallet
+```
 
-**Purpose:** Deploy and manage game instances
+### Game Contracts
 
-**Key Responsibilities:**
-- Deploy new game contracts
-- Track game addresses
-- Version management
-- Upgrade patterns
+**Implemented Games:**
+
+1. **CoinFlipGame** - Binary outcome with commit-reveal
+   - Prevents front-running via secret hash commitment
+   - VRF determines Mario or Luigi win
+   - 1.95x payout multiplier
+
+2. **DiceGame** - Multi-tier outcome game
+   - Risk levels: Mushroom, Fire Flower, Star, 1-Up
+   - 1.5x to 98x payout multipliers
+   - Commit-reveal protection
+
+3. **PowerUpLottery** - Round-based raffle
+   - Uses MCT token for tickets
+   - Time-based rounds (60s local, 3600s testnet)
+   - VRF selects winner from all participants
 
 ## Data Flow
 
-### Betting Flow
+### Betting Flow (CoinFlip/Dice)
 
 ```
-1. User connects wallet
-2. User selects game
-3. User places bet (approve + deposit)
-4. Game contract receives bet
-5. Game requests randomness from VRF
-6. VRF returns random number
-7. Game calculates outcome
-8. Treasury processes payout
-9. User receives winnings
+1. User connects wallet (MetaMask/RainbowKit)
+2. User selects game and bet amount
+3. User commits bet with secret hash + slashing deposit
+4. Game contract requests VRF randomness
+5. User waits for VRF fulfillment (~2 minutes)
+6. User reveals bet with original secret
+7. Contract validates secret hash matches
+8. Game calculates outcome based on VRF result
+9. Treasury processes payout if player wins
 10. Event emitted for frontend update
 ```
+
+### Betting Flow (Lottery)
+
+```
+1. User gets MCT tokens (faucet on testnet)
+2. User approves TreasuryManager to spend MCT
+3. User deposits MCT into TreasuryManager
+4. User buys lottery tickets (1 MCT each)
+5. Round timer expires or admin ends round
+6. Contract requests VRF for winner selection
+7. VRF returns random number
+8. Winner determined from ticket holders
+9. Treasury pays out prize pool to winner
+10. New round automatically starts
+```
+
+### Local VRF Testing Flow
+
+For local development, Chainlink VRF doesn't auto-fulfill. Manual fulfillment required:
+
+```
+1. Game requests randomness → requestId = 1, 2, 3...
+2. Check Hardhat node terminal for requestId
+3. Run fulfill script:
+   npx hardhat run scripts/fulfill-vrf.js --network localhost -- <requestId>
+4. LocalVRFCoordinatorV2PlusMock fulfills the request
+5. Game's fulfillRandomWords callback executed
+6. User can now reveal/settle their bet
+```
+
+**Scripts for VRF:**
+- `scripts/fulfill-vrf.js` - Simple VRF fulfillment (recommended)
+- `scripts/fulfill.js` - Advanced VRF with custom random values
 
 ### Event-Driven Updates
 
