@@ -118,9 +118,9 @@ async function main() {
 
   // 6. Register games in Core
   console.log("\n🎮 Registering games...");
-  const tx2 = await marcasinoCore.registerGame(coinFlipGameAddress, "CoinFlip");
+  const tx2 = await marcasinoCore.registerGame(coinFlipGameAddress, "CoinFlipV2");
   await tx2.wait();
-  console.log("✅ CoinFlip registered");
+  console.log("✅ CoinFlipV2 registered");
 
   const tx3 = await marcasinoCore.registerGame(diceGameAddress, "Dice");
   await tx3.wait();

@@ -2,21 +2,21 @@ import { hardhat, sepolia } from 'wagmi/chains';
 
 const SEPOLIA_FALLBACK_DEPLOYMENT: Deployment = {
   network: 'sepolia',
-  timestamp: '2026-02-08T05:45:50.172Z',
+  timestamp: '2026-02-11T15:02:00.000Z',
   contracts: {
-    MarcasinoCore: '0x2054ec7315138A2dBc8B9b51C15a5d2C8749c0C6',
-    TreasuryManager: '0x54e09bc035F2dde6334187372412608550a15755',
-    CoinFlipGame: '0x2095e8f169bCe2C4252a4E9B022f5f196F304958',
-    DiceGame: '0xE03841B9F2843bc56ce348DcaEfa31A63BC4d2d8',
-    PowerUpLottery: '0xB3d5330AD1DA68c108E458A079cD89eF32C5269a',
-    MockToken: '0xe12814Ca5916A757E4eBEb7360aCdd34C086F327',
+    MarcasinoCore: '0xDD024a72771A1abA6F1e0fa707bc76d2E62e785d',
+    TreasuryManager: '0xDa06f87B0EC232015f330282ddf117b69C427682',
+    CoinFlipGame: '0x7eaE3b83360bC913b1EDDdFe120c9B3241104B3E',
+    DiceGame: '0x196483DBf75B6228F8905e21484B34B38dED62FE',
+    PowerUpLottery: '0x9F72a2Ca162088A01d9bb68d6fC17b2Ac3d4a1F1',
+    MockToken: '0xE4157368F05415b6Ed4447c8b2bf184883f130E0',
   },
   config: {
     houseEdge: 100,
     minBet: '10000000000000000',
     maxBet: '1000000000000000000000',
-    vrfCoordinator: '0x8103B0A8A00be2DDC778e6e7eaa21791Cd364625',
-    vrfKeyHash: '0x474e34a077df58807dbe9c96d3c009b23b3c6d0cce433e59bbf5b34f823bc56c',
+    vrfCoordinator: '0x9DdfaCa8183c41ad55329BdeeD9F6A8d53168B1B',
+    vrfKeyHash: '0x787d74caea10b2b357790d5b5247c2f63d1d91572a9846f780606e4d953677ae',
     vrfSubscriptionId:
       '1983448149351078970646998783068266777241512301730753921521870836150867354700',
     revealDelay: 120,
