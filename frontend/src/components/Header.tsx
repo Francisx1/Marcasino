@@ -29,9 +29,6 @@ export default function Header() {
             <Link href="/games" className="font-game text-white text-xl hover:text-yellow-300 transition-colors">
               Games
             </Link>
-            <Link href="/docs" className="font-game text-white text-xl hover:text-yellow-300 transition-colors">
-              Docs
-            </Link>
           </nav>
 
           {/* Wallet Connect */}

@@ -111,7 +111,7 @@ export default function CoinFlipPage() {
     setStatus('Revealing...');
 
     const wagerToken = useToken ? deployment.contracts.MockToken : '0x0000000000000000000000000000000000000000';
-    const amount = useToken ? parseEther(betEth) : parseEther(betEth);
+    const amount = parseEther(betEth);
 
     const hash = await walletClient.writeContract({
       address: deployment.contracts.CoinFlipGame,
@@ -197,9 +197,9 @@ export default function CoinFlipPage() {
     : undefined;
 
   return (
-    <main className="min-h-screen">
+    <main className="min-h-screen flex flex-col">
       <Header />
-      <div className="container mx-auto px-4 py-10 text-white">
+      <div className="flex-grow container mx-auto px-4 py-10 text-white">
         <h1 className="font-pixel text-2xl mb-6">Coin Flip</h1>
 
         <div className="space-y-4 bg-black/40 p-6 pixel-border">

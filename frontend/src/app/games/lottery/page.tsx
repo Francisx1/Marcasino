@@ -177,9 +177,9 @@ export default function LotteryPage() {
     : undefined;
 
   return (
-    <main className="min-h-screen">
+    <main className="min-h-screen flex flex-col">
       <Header />
-      <div className="container mx-auto px-4 py-10 text-white">
+      <div className="flex-grow container mx-auto px-4 py-10 text-white">
         <h1 className="font-pixel text-2xl mb-6">Power-Up Lottery</h1>
 
         <div className="space-y-4 bg-black/40 p-6 pixel-border">

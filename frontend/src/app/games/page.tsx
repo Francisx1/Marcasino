@@ -4,9 +4,11 @@ import Footer from '@/components/Footer'
 
 export default function GamesPage() {
   return (
-    <main className="min-h-screen">
+    <main className="min-h-screen flex flex-col">
       <Header />
-      <GameGrid />
+      <div className="flex-grow">
+        <GameGrid />
+      </div>
       <Footer />
     </main>
   )
