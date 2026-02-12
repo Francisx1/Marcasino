@@ -26,6 +26,7 @@ Marcasino/
 │   │   ├── interfaces/    # Contract interfaces
 │   │   └── libraries/     # Shared libraries
 │   ├── test/              # Contract tests
+│   ├── scripts/            # Hardhat scripts (deploy, local VRF fulfill, sepolia helpers)
 │   └── hardhat.config.js
 ├── frontend/              # Next.js frontend
 │   ├── src/
@@ -39,7 +40,7 @@ Marcasino/
 │   ├── architecture.md
 │   ├── security-analysis.md
 │   └── gas-optimization.md
-├── scripts/              # Deployment scripts
+├── scripts/              # (Optional) misc scripts
 └── package.json
 ```
 
@@ -76,14 +77,8 @@ Marcasino/
 ### Installation
 
 ```bash
-# Install dependencies
-npm install
-
-# Install contract dependencies
-cd contracts && npm install && cd ..
-
-# Install frontend dependencies
-cd frontend && npm install && cd ..
+# Install all workspaces (root + contracts + frontend)
+npm run install:all
 ```
 
 ### Configuration
@@ -109,25 +104,27 @@ VRF_SUBSCRIPTION_ID_SEPOLIA=your_chainlink_vrf_subscription_id
 ### Development
 
 ```bash
-# Start local Hardhat blockchain (Terminal 1)
-cd contracts
+# Terminal 1: start local Hardhat node
 npm run node
 
-# Deploy contracts locally (Terminal 2)
-cd contracts
+# Terminal 2: deploy contracts to localhost
 npm run deploy:local
 
-# Start frontend development server (Terminal 3)
-cd frontend
-npm run dev
+# Terminal 3: start frontend
+npm run dev:frontend
+```
 
-# Fulfill VRF requests manually on localhost (Terminal 4)
-cd contracts
-REQUEST_ID=1 npx hardhat run scripts/fulfill.js --network localhost
+### Local testing (localhost)
 
-# Run tests
+On localhost, VRF is mocked and must be manually fulfilled.
+
+```bash
+# (Optional) skip commit-reveal delay during local testing
 cd contracts
-npm test
+npm run time:advance
+
+# Manually fulfill VRF requests (LOCAL ONLY)
+REQUEST_ID=1 npx hardhat run --network localhost scripts/fulfill.js
 ```
 
 **Note:** For detailed local testing guide including VRF fulfillment, see [LOCAL_TESTING_GUIDE.md](LOCAL_TESTING_GUIDE.md)
@@ -168,8 +165,8 @@ npm test
 ## 🧪 Testing
 
 ```bash
-# Run all tests
-npm run test
+# Run all contract tests (from repo root)
+npm test
 
 # Run with coverage
 npm run test:coverage
@@ -189,7 +186,6 @@ npm run test contracts/test/MarcasinoCore.test.js
 5. Deploy:
 
 ```bash
-cd contracts
 npm run deploy:sepolia
 ```
 
@@ -198,6 +194,17 @@ npm run deploy:sepolia
 - **Fulfillment is automatic on Sepolia**: Chainlink VRF nodes call `fulfillRandomWords` on-chain. You cannot (and should not) run `scripts/fulfill.js` on Sepolia.
 - **Settlement is a separate transaction**: after `fulfilled=true`, call `settleRequest(requestId)` to resolve the game and write the result.
 - The frontend auto-refreshes `fulfilled/settled` status and shows a Chainlink Explorer link for the VRF request.
+
+### Useful Sepolia helper scripts
+
+```bash
+# Raise Treasury payout ratio on Sepolia (testnet convenience)
+cd contracts
+npx hardhat run --network sepolia scripts/set-treasury-payout-ratio-sepolia.js
+
+# Redeploy only the Lottery contract (PowerUpLottery) and sync deployments JSON
+npx hardhat run --network sepolia scripts/redeploy-lottery.js
+```
 
 ### Troubleshooting: `settleRequest` Reverts With `PayoutTooLarge`
 
@@ -270,9 +277,98 @@ MIT License - see LICENSE file for details
 - [x] Configurable TreasuryManager risk controls
 - [x] ERC-20 token integration for lottery
 - [x] Frontend deployment configuration sync
-- [ ] Comprehensive frontend contract integration
-- [ ] UI cleanup and optimization
-- [ ] Security audit (optional)
+- [x] Comprehensive frontend contract integration
+- [x] UI cleanup and optimization
+- [x] Security audit (optional)
+
+## ✅ SC6107 Option 4 Alignment (On-Chain Verifiable Random Game Platform)
+
+This project is designed to satisfy the SC6107 Option 4 requirements: a provably fair on-chain gaming platform using verifiable randomness.
+
+### Verifiable Randomness (Chainlink VRF)
+
+- Chainlink VRF v2.5 is integrated via a shared base contract (`VRFConsumerGame.sol`).
+- Requests and outcomes are recorded on-chain and exposed to the frontend for verification.
+- On Sepolia, VRF fulfillment is performed automatically by Chainlink nodes (no manual fulfill on testnet).
+- Local development uses a mock VRF coordinator and a local-only fulfillment script.
+
+### Game Implementations (>= 2)
+
+- CoinFlip (commit–reveal + VRF outcome)
+- Dice (tiered multipliers + commit–reveal + VRF outcome)
+- PowerUpLottery (ticket-based raffle + VRF winner selection)
+
+### Betting & Treasury Management
+
+- Supports ETH and ERC-20 betting (MCT for lottery).
+- Funds are isolated in `TreasuryManager.sol` with configurable risk controls (min/max bet, payout ratio, reserve checks).
+- Payouts are credited to an internal balance in the treasury and can be withdrawn to the wallet from the frontend.
+
+### Anti-Cheating & Fairness (Anti-MEV)
+
+- Commit–reveal scheme for games where the player chooses an action before randomness is requested.
+- Time-locked reveals and expiration windows.
+- Slashing deposits for malicious or non-revealed commitments.
+
+### Operational Considerations
+
+- VRF callback gas limitations are handled by separating VRF fulfillment from settlement (manual `settleRequest(requestId)` step).
+- Frontend polls request state (`fulfilled/settled`) and provides links to verify VRF requests on Chainlink Explorer.
+- Scripts are provided for testnet troubleshooting (e.g., adjusting treasury payout ratio).
+
+## 🎤 Marcasino Presentation Script (SC6107)
+
+### Speaker 1: Oscar (Introduction → Architecture)
+
+Hello everyone, today we present Marcasino, a provably fair Web3 gaming platform deployed on the Sepolia testnet.
+
+Traditional online games rely on centralized servers, which makes fairness and transparency difficult to verify.
+Our goal is to design a fully on-chain lottery system where randomness, fund management, and settlement are all publicly verifiable.
+
+Marcasino integrates Chainlink VRF for cryptographically secure randomness, an isolated treasury contract for fund protection, and a commit–reveal mechanism to mitigate front-running and MEV attacks.
+
+This slide shows the overall system architecture, including the frontend Web3 interface, smart contracts, treasury management, and VRF oracle interaction that together form a complete decentralized gaming workflow.
+
+Next, Zhang He will introduce the smart contract design and core technical mechanisms.
+
+### Speaker 2: Zhang He (Smart Contract → Security → VRF)
+
+Thank you. I will explain the smart contract design and key technical decisions.
+
+Our system is built around a VRF-based game contract that securely requests randomness from Chainlink and records each request on-chain for verification.
+
+To protect user funds, we separate gameplay logic from treasury management, reducing the attack surface and ensuring secure payout.
+
+We also implement a commit–reveal mechanism to prevent front-running before randomness is generated, which improves fairness in public blockchain environments.
+
+Together, VRF randomness, treasury isolation, and anti-MEV protection create a provably fair and secure on-chain gaming system.
+
+Next, Wang Xunye will demonstrate the user interaction flow and real on-chain results.
+
+### Speaker 3: Wang Xunye (User Flow → Results → Demo Intro)
+
+Thank you. This slide shows the complete on-chain user interaction flow.
+
+Players first deposit MCT tokens into the treasury and purchase lottery tickets transparently on-chain.
+
+Then Chainlink VRF generates verifiable randomness to determine the winner, followed by on-chain settlement and payout.
+
+Here we show real transaction execution and live Web3 interaction on the Sepolia testnet, confirming that the full system works end-to-end.
+
+In conclusion, Marcasino demonstrates a functional, secure, and verifiably fair decentralized gaming platform.
+
+Now we will present a short live demo.
+
+### Demo Script (1 Minute Live Demonstration)
+
+We will quickly demonstrate the full workflow:
+
+1. Connect wallet
+2. Deposit tokens
+3. Purchase a lottery ticket
+4. Request a VRF draw
+5. Wait for VRF fulfillment
+6. Settle the request and show the winner and prize withdrawal
 
 ## 📞 Contact
 
