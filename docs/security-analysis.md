@@ -56,6 +56,11 @@ function requestRandomness() internal returns (uint256) {
 }
 ```
 
+**Testnet Configuration Note:**
+- During Sepolia testing, it may be necessary to temporarily raise `TreasuryManager.maxSinglePayoutRatio` to avoid `settleRequest` reverting with `PayoutTooLarge(...)` when the treasury balance is small.
+- This should be treated as a **test-only setting**. Raising the ratio increases downside risk and can weaken treasury draining protections.
+- Production deployments should keep strict payout limits and be funded appropriately.
+
 ### 2. Reentrancy Attacks
 
 **Threat:** Malicious contracts calling back into game contracts before state updates

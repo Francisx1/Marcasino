@@ -1,6 +1,14 @@
 const hre = require("hardhat");
 
 async function main() {
+  if (hre.network.name !== "localhost" && hre.network.name !== "hardhat") {
+    throw new Error(
+      `scripts/fulfill.js is only for local testing (localhost/hardhat) with LocalVRFCoordinatorV2PlusMock.\n` +
+        `On Sepolia, fulfillment is performed automatically by Chainlink VRF nodes (you cannot manually fulfill).\n` +
+        `Instead, wait for the VRF callback and then call settleRequest(requestId), or use scripts/commit-reveal-sepolia.js which can auto-settle.`
+    );
+  }
+
   const requestIdArg = process.argv[2] || process.env.REQUEST_ID;
   if (!requestIdArg) {
     throw new Error(

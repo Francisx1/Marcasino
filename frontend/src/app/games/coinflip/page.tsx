@@ -180,7 +180,7 @@ export default function CoinFlipPage() {
 
     if (extracted) {
       setRequestId(extracted);
-      setStatus(`Reveal sent. requestId=${extracted}. Now run: $env:REQUEST_ID="${extracted}"; npx hardhat run scripts/fulfill.js --network localhost`);
+      setStatus(`✅ Reveal sent. requestId=${extracted}. Waiting for Chainlink VRF fulfillment...`);
     } else {
       setRequestId('');
       setStatus('Reveal sent. Wait for VRF fulfill, then settle. (requestId not detected; paste manually)');
@@ -189,16 +189,31 @@ export default function CoinFlipPage() {
 
   async function settle() {
     if (!walletClient || !publicClient || !deployment || !requestId) return;
-    setStatus('⏳ Settling bet and processing results...');
-    const hash = await walletClient.writeContract({
-      address: deployment.contracts.CoinFlipGame,
-      abi: CoinFlipGameAbi,
-      functionName: 'settleRequest',
-      args: [BigInt(requestId)],
-    });
-    await publicClient.waitForTransactionReceipt({ hash });
-    await refreshViews();
-    setStatus('');
+    try {
+      setStatus('⏳ Preflighting settleRequest...');
+      await publicClient.simulateContract({
+        address: deployment.contracts.CoinFlipGame,
+        abi: CoinFlipGameAbi,
+        functionName: 'settleRequest',
+        args: [BigInt(requestId)],
+        account: address as any,
+      });
+
+      setStatus('⏳ Settling bet (confirm in wallet)...');
+      const hash = await walletClient.writeContract({
+        address: deployment.contracts.CoinFlipGame,
+        abi: CoinFlipGameAbi,
+        functionName: 'settleRequest',
+        args: [BigInt(requestId)],
+      });
+      setStatus(`⏳ settle tx sent: ${hash}. Waiting for confirmation...`);
+      await publicClient.waitForTransactionReceipt({ hash });
+      await refreshViews();
+      setStatus('');
+    } catch (e: any) {
+      const msg = e?.shortMessage || e?.message || String(e);
+      setStatus('❌ Settle failed: ' + msg);
+    }
   }
 
   async function refreshViews() {
@@ -211,6 +226,10 @@ export default function CoinFlipPage() {
       args: [rid],
     });
     setRequestView(req);
+
+    if (req?.fulfilled && !req?.settled && !outcomeView?.exists) {
+      setStatus('✅ VRF fulfilled. Click “Settle & See Result” to finalize.');
+    }
 
     const out = await publicClient.readContract({
       address: deployment.contracts.CoinFlipGame,
@@ -399,6 +418,7 @@ export default function CoinFlipPage() {
                   {requestView && (
                     <>
                       <div>VRF Fulfilled: <span className={requestView.fulfilled ? 'text-green-400' : 'text-red-400'}>{String(requestView.fulfilled)}</span></div>
+                      <div>Request Settled: <span className={requestView.settled ? 'text-green-400' : 'text-red-400'}>{String(requestView.settled)}</span></div>
                       {requestView.fulfilled && <div>Random: {requestView.randomWord?.toString?.()}</div>}
                     </>
                   )}
@@ -411,10 +431,12 @@ export default function CoinFlipPage() {
                     <span className="text-2xl">⚠️</span>
                     <div className="flex-1">
                       <div className="text-yellow-200 font-game mb-2">Waiting for VRF fulfillment</div>
-                      <div className="text-sm text-yellow-100 mb-2">Run this command in your terminal:</div>
-                      <code className="block bg-black/40 p-2 rounded border border-yellow-600/50 text-xs text-yellow-300 break-all">
-                        $env:REQUEST_ID="{requestId}"; npx hardhat run scripts/fulfill.js --network localhost
-                      </code>
+                      <div className="text-sm text-yellow-100 mb-2">Chainlink VRF will fulfill automatically on Sepolia. This can take a bit.</div>
+                      {verifyUrl && (
+                        <a className="inline-block underline text-blue-300 text-sm" href={verifyUrl} target="_blank" rel="noreferrer">
+                          🔗 Verify VRF on Chainlink Explorer
+                        </a>
+                      )}
                     </div>
                   </div>
                 </div>

@@ -60,25 +60,12 @@ export default function LotteryPage() {
 
   // Auto-refresh VRF status in Step 3
   useEffect(() => {
-    if (step === 3 && requestId && publicClient && deployment) {
-      const interval = setInterval(async () => {
-        try {
-          const req = await publicClient.readContract({
-            address: deployment.contracts.PowerUpLottery,
-            abi: PowerUpLotteryAbi,
-            functionName: 'getRequest',
-            args: [BigInt(requestId)],
-          });
-          setRequestView(req);
-          if ((req as any).fulfilled) {
-            clearInterval(interval);
-          }
-        } catch (e) {
-          console.error('VRF poll error:', e);
-        }
-      }, 3000);
-      return () => clearInterval(interval);
-    }
+    if (step !== 3 || !requestId || !publicClient || !deployment) return;
+    refreshViews();
+    const interval = setInterval(() => {
+      refreshViews();
+    }, 3000);
+    return () => clearInterval(interval);
   }, [step, requestId, publicClient, deployment]);
 
   async function faucetAndDeposit() {
@@ -193,28 +180,57 @@ export default function LotteryPage() {
 
   async function settle() {
     if (!walletClient || !publicClient || !deployment || !requestId) return;
-    setStatus('⏳ Settling lottery and revealing winner...');
     try {
+      setStatus('⏳ Preflighting settleRequest...');
+      await publicClient.simulateContract({
+        address: deployment.contracts.PowerUpLottery,
+        abi: PowerUpLotteryAbi,
+        functionName: 'settleRequest',
+        args: [BigInt(requestId)],
+        account: address as any,
+      });
+
+      setStatus('⏳ Settling lottery (confirm in wallet)...');
       const hash = await walletClient.writeContract({
         address: deployment.contracts.PowerUpLottery,
         abi: PowerUpLotteryAbi,
         functionName: 'settleRequest',
         args: [BigInt(requestId)],
       });
+      setStatus(`⏳ settle tx sent: ${hash}. Waiting for confirmation...`);
       await publicClient.waitForTransactionReceipt({ hash });
-      
-      const res = await publicClient.readContract({
-        address: deployment.contracts.PowerUpLottery,
-        abi: PowerUpLotteryAbi,
-        functionName: 'resultsByRequestId',
-        args: [BigInt(requestId)],
-      });
-      setResultView(res);
+      await refreshViews();
       setStep(4);
       setStatus('✅ Lottery settled! Check the results below.');
     } catch (e: any) {
-      setStatus('❌ Settlement failed: ' + e.message);
+      const msg = e?.shortMessage || e?.message || String(e);
+      setStatus('❌ Settlement failed: ' + msg);
     }
+  }
+
+  async function refreshViews() {
+    if (!publicClient || !deployment || !requestId) return;
+    const rid = BigInt(requestId);
+
+    const req = await publicClient.readContract({
+      address: deployment.contracts.PowerUpLottery,
+      abi: PowerUpLotteryAbi,
+      functionName: 'getRequest',
+      args: [rid],
+    });
+    setRequestView(req);
+
+    if ((req as any)?.fulfilled && !(req as any)?.settled && !(resultView as any)?.exists) {
+      setStatus('✅ VRF fulfilled. Click “Settle & See Result” to finalize.');
+    }
+
+    const res = await publicClient.readContract({
+      address: deployment.contracts.PowerUpLottery,
+      abi: PowerUpLotteryAbi,
+      functionName: 'resultsByRequestId',
+      args: [rid],
+    });
+    setResultView(res);
   }
 
   function playAgain() {

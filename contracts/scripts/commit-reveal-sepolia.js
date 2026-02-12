@@ -1,7 +1,19 @@
 const hre = require('hardhat');
+const fs = require('fs');
+const path = require('path');
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function loadDeployments(networkName) {
+  const p = path.join(__dirname, '..', 'deployments', `${networkName}.json`);
+  if (!fs.existsSync(p)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(p, 'utf8'));
+  } catch {
+    return null;
+  }
 }
 
 async function main() {
@@ -11,10 +23,10 @@ async function main() {
   const amountEth = '0.02';
   const secret = '0x1111111111111111111111111111111111111111111111111111111111111111';
 
-  // Addresses (from your current Sepolia setup)
+  const deployment = loadDeployments(hre.network.name);
   const addresses = {
-    TreasuryManager: '0xDa06f87B0EC232015f330282ddf117b69C427682',
-    CoinFlipGame: '0x7eaE3b83360bC913b1EDDdFe120c9B3241104B3E',
+    TreasuryManager: deployment?.contracts?.TreasuryManager || '0xDa06f87B0EC232015f330282ddf117b69C427682',
+    CoinFlipGame: deployment?.contracts?.CoinFlipGame || '0x7eaE3b83360bC913b1EDDdFe120c9B3241104B3E',
   };
 
   const [signer] = await hre.ethers.getSigners();
@@ -192,7 +204,47 @@ async function main() {
   }
 
   console.log('\n[7] requestId =', requestId ? requestId.toString() : 'NOT_FOUND');
-  console.log('Done.');
+
+  if (!requestId) {
+    console.log('Done.');
+    return;
+  }
+
+  // Auto-wait for VRF fulfillment + auto-settle
+  console.log('\n[8] waiting for VRF fulfillment (RandomnessFulfilled)...');
+  const start = Date.now();
+  const maxWaitMs = 15 * 60 * 1000;
+  while (Date.now() - start < maxWaitMs) {
+    try {
+      const r = await game.vrfRequests(requestId);
+      const fulfilled = r.fulfilled;
+      const settled = r.settled;
+      console.log('  fulfilled:', fulfilled, 'settled:', settled);
+      if (settled) {
+        console.log('  ✅ already settled');
+        console.log('Done.');
+        return;
+      }
+      if (fulfilled) break;
+    } catch (e) {
+      console.log('  ⚠️  failed to read vrfRequests:', e?.shortMessage || e?.message || String(e));
+    }
+    await sleep(15_000);
+  }
+
+  console.log('\n[9] settleRequest...');
+  try {
+    const txSettle = await game.settleRequest(requestId);
+    console.log('  settle tx:', txSettle.hash);
+    const rc = await txSettle.wait();
+    console.log('  settle mined block:', rc.blockNumber);
+    console.log('Done.');
+  } catch (e) {
+    console.log('  ❌ settleRequest failed:', e?.shortMessage || e?.message || String(e));
+    console.log('  You can retry later with:');
+    console.log(`    npx hardhat run scripts/settle.js --network ${hre.network.name} -- ${requestId.toString()}`);
+    console.log('Done.');
+  }
 }
 
 main().catch((e) => {

@@ -54,27 +54,15 @@ export default function DicePage() {
       .catch((e) => setStatus(e.message));
   }, [chainId]);
 
-  // Auto-refresh VRF status in Step 3
+  // Auto-refresh request/outcome view when requestId changes
   useEffect(() => {
-    if (step !== 3 || !requestId || !publicClient || !deployment) return;
-    const interval = setInterval(async () => {
-      try {
-        const req = await publicClient.readContract({
-          address: deployment.contracts.DiceGame,
-          abi: DiceGameAbi,
-          functionName: 'getRequest',
-          args: [BigInt(requestId)],
-        });
-        setRequestView(req);
-        if ((req as any).fulfilled) {
-          clearInterval(interval);
-        }
-      } catch (e) {
-        console.error('Poll error:', e);
-      }
+    if (!requestId || !publicClient || !deployment) return;
+    refreshViews();
+    const interval = setInterval(() => {
+      refreshViews();
     }, 3000);
     return () => clearInterval(interval);
-  }, [step, requestId, publicClient, deployment]);
+  }, [requestId, publicClient, deployment]);
 
   const commitment = (() => {
     if (!address || !deployment) return undefined;
@@ -217,28 +205,57 @@ export default function DicePage() {
 
   async function settle() {
     if (!walletClient || !publicClient || !deployment || !requestId) return;
-    setStatus('⏳ Settling bet and processing results...');
     try {
+      setStatus('⏳ Preflighting settleRequest...');
+      await publicClient.simulateContract({
+        address: deployment.contracts.DiceGame,
+        abi: DiceGameAbi,
+        functionName: 'settleRequest',
+        args: [BigInt(requestId)],
+        account: address as any,
+      });
+
+      setStatus('⏳ Settling bet (confirm in wallet)...');
       const hash = await walletClient.writeContract({
         address: deployment.contracts.DiceGame,
         abi: DiceGameAbi,
         functionName: 'settleRequest',
         args: [BigInt(requestId)],
       });
+      setStatus(`⏳ settle tx sent: ${hash}. Waiting for confirmation...`);
       await publicClient.waitForTransactionReceipt({ hash });
-      
-      const out = await publicClient.readContract({
-        address: deployment.contracts.DiceGame,
-        abi: DiceGameAbi,
-        functionName: 'getOutcome',
-        args: [BigInt(requestId)],
-      });
-      setOutcomeView(out);
+      await refreshViews();
       setStep(4);
       setStatus('✅ Bet settled! Check your results below.');
     } catch (e: any) {
-      setStatus('❌ Settle failed: ' + e.message);
+      const msg = e?.shortMessage || e?.message || String(e);
+      setStatus('❌ Settle failed: ' + msg);
     }
+  }
+
+  async function refreshViews() {
+    if (!publicClient || !deployment || !requestId) return;
+    const rid = BigInt(requestId);
+
+    const req = await publicClient.readContract({
+      address: deployment.contracts.DiceGame,
+      abi: DiceGameAbi,
+      functionName: 'getRequest',
+      args: [rid],
+    });
+    setRequestView(req);
+
+    if ((req as any)?.fulfilled && !(req as any)?.settled && !(outcomeView as any)?.exists) {
+      setStatus('✅ VRF fulfilled. Click “Settle & See Result” to finalize.');
+    }
+
+    const out = await publicClient.readContract({
+      address: deployment.contracts.DiceGame,
+      abi: DiceGameAbi,
+      functionName: 'getOutcome',
+      args: [rid],
+    });
+    setOutcomeView(out);
   }
 
   function playAgain() {

@@ -44,6 +44,7 @@ abstract contract VRFConsumerGame is VRFConsumerBaseV2Plus, ReentrancyGuard {
     event RequestRetried(uint256 indexed oldRequestId, uint256 indexed newRequestId);
     event RequestRefunded(uint256 indexed requestId, address indexed player);
     event RequestSettled(uint256 indexed requestId);
+    event AutoSettleFailed(uint256 indexed requestId, bytes reason);
     event VrfTimeoutUpdated(uint256 oldTimeout, uint256 newTimeout);
     event CallbackGasLimitUpdated(uint32 oldLimit, uint32 newLimit);
     

@@ -193,6 +193,30 @@ cd contracts
 npm run deploy:sepolia
 ```
 
+### Sepolia VRF Notes (Testnet)
+
+- **Fulfillment is automatic on Sepolia**: Chainlink VRF nodes call `fulfillRandomWords` on-chain. You cannot (and should not) run `scripts/fulfill.js` on Sepolia.
+- **Settlement is a separate transaction**: after `fulfilled=true`, call `settleRequest(requestId)` to resolve the game and write the result.
+- The frontend auto-refreshes `fulfilled/settled` status and shows a Chainlink Explorer link for the VRF request.
+
+### Troubleshooting: `settleRequest` Reverts With `PayoutTooLarge`
+
+If `settleRequest` reverts with `PayoutTooLarge(...)`, the Treasury risk limit is blocking the payout (default `maxSinglePayoutRatio`).
+
+For testnet testing, you can temporarily raise the ratio on the deployed Sepolia TreasuryManager:
+
+```bash
+cd contracts
+npx hardhat run --network sepolia scripts/set-treasury-payout-ratio-sepolia.js
+```
+
+You can override the value (1..100) with:
+
+```bash
+cd contracts
+TREASURY_MAX_SINGLE_PAYOUT_RATIO=20 npx hardhat run --network sepolia scripts/set-treasury-payout-ratio-sepolia.js
+```
+
 ### Verification (After deployment)
 
 ```bash

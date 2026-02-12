@@ -151,6 +151,12 @@ Game Contract ← Fulfill Callback ← VRF Coordinator
 Process Result → Update State → Emit Event → Payout
 ```
 
+**Sepolia Notes (Testnet):**
+- On Sepolia, **fulfillment is performed automatically by Chainlink VRF nodes** via the coordinator callback. Manual `scripts/fulfill.js` is only for local testing with the mock coordinator.
+- `fulfilled` indicates the VRF callback has stored the random word.
+- `settled` indicates the game result has been processed and the outcome has been written (via `settleRequest(requestId)`).
+- The frontend continuously polls request/outcome views after a `requestId` is created to keep `fulfilled/settled` UI state up to date.
+
 ### TreasuryManager Contract
 
 **Purpose:** Centralized treasury for all game funds management

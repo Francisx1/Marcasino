@@ -16,7 +16,7 @@ async function main() {
   let VRF_COORDINATOR = process.env.VRF_COORDINATOR_SEPOLIA || "0x8103B0A8A00be2DDC778e6e7eaa21791Cd364625";
   let VRF_KEY_HASH = process.env.VRF_KEY_HASH_SEPOLIA || "0x474e34a077df58807dbe9c96d3c009b23b3c6d0cce433e59bbf5b34f823bc56c";
   let VRF_SUBSCRIPTION_ID = process.env.VRF_SUBSCRIPTION_ID_SEPOLIA || "0";
-  const CALLBACK_GAS_LIMIT = 100000;
+  const CALLBACK_GAS_LIMIT = Number(process.env.VRF_CALLBACK_GAS_LIMIT || "250000");
 
   if (hre.network.name === "localhost" || hre.network.name === "hardhat") {
     console.log("\n🧪 Deploying LocalVRFCoordinatorV2PlusMock for local testing...");
@@ -46,6 +46,17 @@ async function main() {
   await treasuryManager.waitForDeployment();
   const treasuryManagerAddress = await treasuryManager.getAddress();
   console.log("✅ TreasuryManager deployed to:", treasuryManagerAddress);
+
+  const TREASURY_MAX_SINGLE_PAYOUT_RATIO = Number(
+    process.env.TREASURY_MAX_SINGLE_PAYOUT_RATIO ||
+      (hre.network.name === "sepolia" || hre.network.name === "localhost" || hre.network.name === "hardhat" ? "100" : "5")
+  );
+  if (TREASURY_MAX_SINGLE_PAYOUT_RATIO !== 5) {
+    console.log(`\n🔧 Setting Treasury maxSinglePayoutRatio = ${TREASURY_MAX_SINGLE_PAYOUT_RATIO}% ...`);
+    const txPayoutRatio = await treasuryManager.setMaxSinglePayoutRatio(TREASURY_MAX_SINGLE_PAYOUT_RATIO);
+    await txPayoutRatio.wait();
+    console.log("✅ Treasury maxSinglePayoutRatio updated");
+  }
 
   // 2.5 Deploy Mock Token (MCT)
   console.log("\n🪙 Deploying MockERC20 (MCT)...");
@@ -118,9 +129,9 @@ async function main() {
 
   // 6. Register games in Core
   console.log("\n🎮 Registering games...");
-  const tx2 = await marcasinoCore.registerGame(coinFlipGameAddress, "CoinFlipV2");
+  const tx2 = await marcasinoCore.registerGame(coinFlipGameAddress, "CoinFlipV3");
   await tx2.wait();
-  console.log("✅ CoinFlipV2 registered");
+  console.log("✅ CoinFlipV3 registered");
 
   const tx3 = await marcasinoCore.registerGame(diceGameAddress, "Dice");
   await tx3.wait();
