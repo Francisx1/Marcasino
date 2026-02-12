@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useAccount, useChainId, usePublicClient, useWalletClient } from 'wagmi';
-import { parseEther, keccak256, encodePacked, decodeEventLog } from 'viem';
+import { parseEther, keccak256, encodePacked, decodeEventLog, formatEther } from 'viem';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { CoinFlipGameAbi, MockERC20Abi, TreasuryManagerAbi } from '@/contracts/abis';
@@ -23,6 +23,8 @@ export default function CoinFlipPage() {
   const [status, setStatus] = useState<string>('');
   const [requestView, setRequestView] = useState<any>(null);
   const [outcomeView, setOutcomeView] = useState<any>(null);
+  const [treasuryEthBalance, setTreasuryEthBalance] = useState<bigint>(BigInt(0));
+  const [treasuryMctBalance, setTreasuryMctBalance] = useState<bigint>(BigInt(0));
   
   // Store committed values to prevent mismatches
   const [committedParams, setCommittedParams] = useState<{
@@ -37,6 +39,15 @@ export default function CoinFlipPage() {
       .then(setDeployment)
       .catch((e) => setStatus(e.message));
   }, [chainId]);
+
+  useEffect(() => {
+    if (!address || !publicClient || !deployment) return;
+    refreshTreasuryBalances();
+    const interval = setInterval(() => {
+      refreshTreasuryBalances();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [address, publicClient, deployment]);
 
   // Auto-refresh request view when requestId changes
   useEffect(() => {
@@ -209,10 +220,95 @@ export default function CoinFlipPage() {
       setStatus(`⏳ settle tx sent: ${hash}. Waiting for confirmation...`);
       await publicClient.waitForTransactionReceipt({ hash });
       await refreshViews();
+      await refreshTreasuryBalances();
       setStatus('');
     } catch (e: any) {
       const msg = e?.shortMessage || e?.message || String(e);
       setStatus('❌ Settle failed: ' + msg);
+    }
+  }
+
+  async function refreshTreasuryBalances() {
+    if (!publicClient || !deployment || !address) return;
+    try {
+      const [ethBal, mctBal] = await Promise.all([
+        publicClient.readContract({
+          address: deployment.contracts.TreasuryManager,
+          abi: TreasuryManagerAbi,
+          functionName: 'playerBalances',
+          args: [address as any],
+        }),
+        publicClient.readContract({
+          address: deployment.contracts.TreasuryManager,
+          abi: TreasuryManagerAbi,
+          functionName: 'playerTokenBalances',
+          args: [address as any, deployment.contracts.MockToken],
+        }),
+      ]);
+      setTreasuryEthBalance(ethBal as bigint);
+      setTreasuryMctBalance(mctBal as bigint);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function withdrawEthFromTreasury() {
+    if (!walletClient || !publicClient || !deployment || !address) return;
+    if (treasuryEthBalance <= BigInt(0)) return;
+    try {
+      setStatus('⏳ Preflighting withdraw...');
+      await publicClient.simulateContract({
+        address: deployment.contracts.TreasuryManager,
+        abi: TreasuryManagerAbi,
+        functionName: 'withdraw',
+        args: [treasuryEthBalance],
+        account: address as any,
+      });
+
+      setStatus('⏳ Withdrawing ETH (confirm in wallet)...');
+      const hash = await walletClient.writeContract({
+        address: deployment.contracts.TreasuryManager,
+        abi: TreasuryManagerAbi,
+        functionName: 'withdraw',
+        args: [treasuryEthBalance],
+      });
+      setStatus(`⏳ withdraw tx sent: ${hash}. Waiting for confirmation...`);
+      await publicClient.waitForTransactionReceipt({ hash });
+      await refreshTreasuryBalances();
+      setStatus('✅ Withdrawn to wallet.');
+    } catch (e: any) {
+      const msg = e?.shortMessage || e?.message || String(e);
+      setStatus('❌ Withdraw failed: ' + msg);
+    }
+  }
+
+  async function withdrawMctFromTreasury() {
+    if (!walletClient || !publicClient || !deployment || !address) return;
+    if (treasuryMctBalance <= BigInt(0)) return;
+    try {
+      setStatus('⏳ Preflighting withdrawToken...');
+      await publicClient.simulateContract({
+        address: deployment.contracts.TreasuryManager,
+        abi: TreasuryManagerAbi,
+        functionName: 'withdrawToken',
+        args: [deployment.contracts.MockToken, treasuryMctBalance],
+        account: address as any,
+      });
+
+      setStatus('⏳ Withdrawing MCT (confirm in wallet)...');
+      const hash = await walletClient.writeContract({
+        address: deployment.contracts.TreasuryManager,
+        abi: TreasuryManagerAbi,
+        functionName: 'withdrawToken',
+        args: [deployment.contracts.MockToken, treasuryMctBalance],
+      });
+      setStatus(`⏳ withdrawToken tx sent: ${hash}. Waiting for confirmation...`);
+      await publicClient.waitForTransactionReceipt({ hash });
+      await refreshTreasuryBalances();
+      setStatus('✅ Withdrawn to wallet.');
+    } catch (e: any) {
+      const msg = e?.shortMessage || e?.message || String(e);
+      setStatus('❌ Withdraw failed: ' + msg);
     }
   }
 
@@ -480,7 +576,6 @@ export default function CoinFlipPage() {
                 )}
               </div>
 
-              {/* Detailed Game Information */}
               <details className="mb-4">
                 <summary className="font-game cursor-pointer bg-black/40 p-3 rounded-lg border-2 border-gray-700 hover:bg-black/60 transition-colors">View Detailed Game Info</summary>
                 <div className="mt-2 bg-black/60 p-4 rounded-lg border-2 border-gray-700 text-sm space-y-2">

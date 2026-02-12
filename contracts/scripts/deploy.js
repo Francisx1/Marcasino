@@ -110,9 +110,11 @@ async function main() {
   console.log("\n📦 Deploying PowerUpLottery...");
   const PowerUpLottery = await hre.ethers.getContractFactory("PowerUpLottery");
   const TICKET_PRICE = hre.ethers.parseUnits("1", 18); // 1 MCT
-  const ROUND_DURATION = (hre.network.name === "localhost" || hre.network.name === "hardhat")
-    ? 60
-    : 3600;
+  const ROUND_DURATION = process.env.LOTTERY_ROUND_DURATION
+    ? Number(process.env.LOTTERY_ROUND_DURATION)
+    : (hre.network.name === "localhost" || hre.network.name === "hardhat" || hre.network.name === "sepolia")
+      ? 60
+      : 3600;
   const powerUpLottery = await PowerUpLottery.deploy(
     marcasinoCoreAddress,
     mockTokenAddress,

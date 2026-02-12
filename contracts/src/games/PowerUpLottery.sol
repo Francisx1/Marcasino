@@ -81,7 +81,12 @@ contract PowerUpLottery is VRFConsumerGame {
         if (count > MAX_TICKETS_PER_BUY) revert InvalidCount();
 
         Round storage r = rounds[currentRoundId];
-        if (block.timestamp >= r.endTime) revert RoundNotActive(currentRoundId);
+        // Round timing starts when the first ticket is purchased.
+        if (r.endTime != 0 && block.timestamp >= r.endTime) revert RoundNotActive(currentRoundId);
+        if (r.ticketCount == 0) {
+            r.startTime = block.timestamp;
+            r.endTime = block.timestamp + roundDuration;
+        }
 
         uint256 totalCost = ticketPrice * count;
 
@@ -103,7 +108,7 @@ contract PowerUpLottery is VRFConsumerGame {
         if (!core.isOperational()) revert NotOperational();
 
         Round storage r = rounds[currentRoundId];
-        if (block.timestamp < r.endTime) revert RoundNotEnded(currentRoundId);
+        if (r.endTime == 0 || block.timestamp < r.endTime) revert RoundNotEnded(currentRoundId);
         if (r.ticketCount == 0) revert NoTickets(currentRoundId);
         if (r.drawRequested) revert DrawAlreadyRequested(currentRoundId);
 
@@ -164,8 +169,8 @@ contract PowerUpLottery is VRFConsumerGame {
 
     function _startNewRound() internal {
         currentRoundId += 1;
-        uint256 startTime = block.timestamp;
-        uint256 endTime = startTime + roundDuration;
+        uint256 startTime = 0;
+        uint256 endTime = 0;
 
         rounds[currentRoundId] = Round({
             startTime: startTime,

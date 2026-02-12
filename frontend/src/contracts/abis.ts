@@ -307,7 +307,24 @@ export const TreasuryManagerAbi = [
   },
   {
     type: 'function',
+    name: 'withdraw',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'amount', type: 'uint256' }],
+    outputs: [],
+  },
+  {
+    type: 'function',
     name: 'depositToken',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'token', type: 'address' },
+      { name: 'amount', type: 'uint256' },
+    ],
+    outputs: [],
+  },
+  {
+    type: 'function',
+    name: 'withdrawToken',
     stateMutability: 'nonpayable',
     inputs: [
       { name: 'token', type: 'address' },

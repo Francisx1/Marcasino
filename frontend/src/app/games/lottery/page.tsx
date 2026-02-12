@@ -28,6 +28,7 @@ export default function LotteryPage() {
   const [roundView, setRoundView] = useState<any>(null);
   const [requestView, setRequestView] = useState<any>(null);
   const [resultView, setResultView] = useState<any>(null);
+  const [treasuryMctBalance, setTreasuryMctBalance] = useState<bigint>(BigInt(0));
   const [hasDeposited, setHasDeposited] = useState(false);
 
   useEffect(() => {
@@ -35,6 +36,15 @@ export default function LotteryPage() {
       .then(setDeployment)
       .catch((e) => setStatus(e.message));
   }, [chainId]);
+
+  useEffect(() => {
+    if (!address || !publicClient || !deployment) return;
+    refreshTreasuryBalances();
+    const interval = setInterval(() => {
+      refreshTreasuryBalances();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [address, publicClient, deployment]);
 
   // Auto-refresh round info in Step 2 and 3
   useEffect(() => {
@@ -200,6 +210,7 @@ export default function LotteryPage() {
       setStatus(`⏳ settle tx sent: ${hash}. Waiting for confirmation...`);
       await publicClient.waitForTransactionReceipt({ hash });
       await refreshViews();
+      await refreshTreasuryBalances();
       setStep(4);
       setStatus('✅ Lottery settled! Check the results below.');
     } catch (e: any) {
@@ -231,6 +242,51 @@ export default function LotteryPage() {
       args: [rid],
     });
     setResultView(res);
+  }
+
+  async function refreshTreasuryBalances() {
+    if (!publicClient || !deployment || !address) return;
+    try {
+      const mctBal = await publicClient.readContract({
+        address: deployment.contracts.TreasuryManager,
+        abi: TreasuryManagerAbi,
+        functionName: 'playerTokenBalances',
+        args: [address as any, deployment.contracts.MockToken],
+      });
+      setTreasuryMctBalance(mctBal as bigint);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function withdrawMctFromTreasury() {
+    if (!walletClient || !publicClient || !deployment || !address) return;
+    if (treasuryMctBalance <= BigInt(0)) return;
+    try {
+      setStatus('⏳ Preflighting withdrawToken...');
+      await publicClient.simulateContract({
+        address: deployment.contracts.TreasuryManager,
+        abi: TreasuryManagerAbi,
+        functionName: 'withdrawToken',
+        args: [deployment.contracts.MockToken, treasuryMctBalance],
+        account: address as any,
+      });
+
+      setStatus('⏳ Withdrawing MCT (confirm in wallet)...');
+      const hash = await walletClient.writeContract({
+        address: deployment.contracts.TreasuryManager,
+        abi: TreasuryManagerAbi,
+        functionName: 'withdrawToken',
+        args: [deployment.contracts.MockToken, treasuryMctBalance],
+      });
+      setStatus(`⏳ withdrawToken tx sent: ${hash}. Waiting for confirmation...`);
+      await publicClient.waitForTransactionReceipt({ hash });
+      await refreshTreasuryBalances();
+      setStatus('✅ Withdrawn to wallet.');
+    } catch (e: any) {
+      const msg = e?.shortMessage || e?.message || String(e);
+      setStatus('❌ Withdraw failed: ' + msg);
+    }
   }
 
   function playAgain() {
@@ -347,7 +403,11 @@ export default function LotteryPage() {
                     </div>
                     <div className="flex justify-between">
                       <span>Round Ends:</span>
-                      <span className="text-blue-300">{new Date(Number(roundView.endTime) * 1000).toLocaleString()}</span>
+                      <span className="text-blue-300">
+                        {BigInt(roundView.endTime || 0) === BigInt(0)
+                          ? 'Not started (starts when first ticket is purchased)'
+                          : new Date(Number(roundView.endTime) * 1000).toLocaleString()}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -384,7 +444,7 @@ export default function LotteryPage() {
 
               <button
                 onClick={requestDraw}
-                disabled={!roundView || Number(roundView.ticketCount) === 0}
+                disabled={!roundView || BigInt(roundView.endTime || 0) === BigInt(0) || (roundView.endTime && Number(roundView.endTime) * 1000 > Date.now()) || Number(roundView.ticketCount) === 0}
                 className="w-full bg-gradient-to-r from-red-500 to-orange-500 hover:from-red-400 hover:to-orange-400 disabled:from-gray-600 disabled:to-gray-700 text-white font-pixel text-xl py-4 rounded-lg shadow-lg transform hover:scale-105 transition-all disabled:scale-100 disabled:cursor-not-allowed"
               >
                 🎲 Request Lottery Draw
@@ -434,24 +494,42 @@ export default function LotteryPage() {
                 )}
               </div>
 
-              <div className="bg-red-900/40 p-4 rounded-lg border-2 border-red-400">
-                <div className="font-game text-red-200 text-sm">
-                  <div className="font-bold mb-2">⚠️ LOCAL TESTING: Manual VRF Fulfillment Required</div>
-                  <div className="bg-black/30 p-3 rounded font-mono text-xs overflow-x-auto">
-                    $env:REQUEST_ID="{requestId}"; npx hardhat run scripts/fulfill.js --network localhost
+              {!requestView?.fulfilled && (
+                <div className="mb-3 p-4 bg-yellow-900/50 rounded-lg border-2 border-yellow-400 shadow-lg animate-pulse">
+                  <div className="flex items-start gap-3">
+                    <span className="text-2xl">⚠️</span>
+                    <div className="flex-1">
+                      <div className="text-yellow-200 font-game mb-2">Waiting for VRF fulfillment</div>
+                      <div className="text-sm text-yellow-100 mb-2">Chainlink VRF will fulfill automatically on Sepolia. This can take a bit.</div>
+                      {verifyUrl && (
+                        <a className="inline-block underline text-blue-300 text-sm" href={verifyUrl} target="_blank" rel="noreferrer">
+                          🔗 Verify VRF on Chainlink Explorer
+                        </a>
+                      )}
+                    </div>
                   </div>
-                  <div className="mt-2 text-xs">Run this command in contracts directory, then wait for auto-refresh</div>
                 </div>
-              </div>
-
-              {requestView?.fulfilled && (
-                <button
-                  onClick={settle}
-                  className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 text-white font-pixel text-xl py-4 rounded-lg shadow-lg transform hover:scale-105 transition-all animate-pulse"
-                >
-                  ✅ Settle & Reveal Winner
-                </button>
               )}
+
+              {(chainId === 31337 || chainId === 1337) && !requestView?.fulfilled && (
+                <div className="bg-red-900/40 p-4 rounded-lg border-2 border-red-400">
+                  <div className="font-game text-red-200 text-sm">
+                    <div className="font-bold mb-2">⚠️ LOCAL TESTING: Manual VRF Fulfillment Required</div>
+                    <div className="bg-black/30 p-3 rounded font-mono text-xs overflow-x-auto">
+                      $env:REQUEST_ID="{requestId}"; npx hardhat run scripts/fulfill.js --network localhost
+                    </div>
+                    <div className="mt-2 text-xs">Run this command in contracts directory, then wait for auto-refresh</div>
+                  </div>
+                </div>
+              )}
+
+              <button
+                onClick={settle}
+                disabled={!requestView?.fulfilled}
+                className="w-full bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-400 hover:to-emerald-400 disabled:from-gray-600 disabled:to-gray-700 text-white font-pixel text-xl py-4 rounded-lg shadow-lg transform hover:scale-105 transition-all disabled:scale-100 disabled:cursor-not-allowed"
+              >
+                ✅ Settle & Reveal Winner
+              </button>
 
               {verifyUrl && (
                 <a
@@ -503,6 +581,23 @@ export default function LotteryPage() {
                       <span className="text-yellow-300 text-sm mt-1">🎊 That's you! Congratulations!</span>
                     )}
                   </div>
+                </div>
+              </div>
+
+              <div className="bg-black/40 p-4 rounded-lg border-2 border-gray-700">
+                <div className="font-game text-sm mb-3 text-gray-200">Treasury Balance (Claim to Wallet)</div>
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="flex items-center justify-between bg-black/30 p-3 rounded">
+                    <div className="text-gray-300">MCT in Treasury</div>
+                    <div className="font-mono text-xs text-yellow-300">{formatEther(treasuryMctBalance)} MCT</div>
+                  </div>
+                  <button
+                    className="w-full bg-gradient-to-r from-pink-500 to-purple-500 hover:from-pink-400 hover:to-purple-400 text-white font-pixel text-xl py-4 rounded-lg shadow-lg transform hover:scale-105 transition-all disabled:opacity-50"
+                    onClick={withdrawMctFromTreasury}
+                    disabled={!address || treasuryMctBalance === BigInt(0)}
+                  >
+                    Withdraw MCT to Wallet
+                  </button>
                 </div>
               </div>
 

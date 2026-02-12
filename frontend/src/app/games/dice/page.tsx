@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useAccount, useChainId, usePublicClient, useWalletClient } from 'wagmi';
-import { parseEther, keccak256, encodePacked, decodeEventLog } from 'viem';
+import { parseEther, keccak256, encodePacked, decodeEventLog, formatEther } from 'viem';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import { DiceGameAbi, MockERC20Abi, TreasuryManagerAbi } from '@/contracts/abis';
@@ -47,12 +47,23 @@ export default function DicePage() {
   // VRF & outcome data
   const [requestView, setRequestView] = useState<any>(null);
   const [outcomeView, setOutcomeView] = useState<any>(null);
+  const [treasuryEthBalance, setTreasuryEthBalance] = useState<bigint>(BigInt(0));
+  const [treasuryMctBalance, setTreasuryMctBalance] = useState<bigint>(BigInt(0));
 
   useEffect(() => {
     loadDeployment(chainId)
       .then(setDeployment)
       .catch((e) => setStatus(e.message));
   }, [chainId]);
+
+  useEffect(() => {
+    if (!address || !publicClient || !deployment) return;
+    refreshTreasuryBalances();
+    const interval = setInterval(() => {
+      refreshTreasuryBalances();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [address, publicClient, deployment]);
 
   // Auto-refresh request/outcome view when requestId changes
   useEffect(() => {
@@ -225,6 +236,7 @@ export default function DicePage() {
       setStatus(`⏳ settle tx sent: ${hash}. Waiting for confirmation...`);
       await publicClient.waitForTransactionReceipt({ hash });
       await refreshViews();
+      await refreshTreasuryBalances();
       setStep(4);
       setStatus('✅ Bet settled! Check your results below.');
     } catch (e: any) {
@@ -256,6 +268,90 @@ export default function DicePage() {
       args: [rid],
     });
     setOutcomeView(out);
+  }
+
+  async function refreshTreasuryBalances() {
+    if (!publicClient || !deployment || !address) return;
+    try {
+      const [ethBal, mctBal] = await Promise.all([
+        publicClient.readContract({
+          address: deployment.contracts.TreasuryManager,
+          abi: TreasuryManagerAbi,
+          functionName: 'playerBalances',
+          args: [address as any],
+        }),
+        publicClient.readContract({
+          address: deployment.contracts.TreasuryManager,
+          abi: TreasuryManagerAbi,
+          functionName: 'playerTokenBalances',
+          args: [address as any, deployment.contracts.MockToken],
+        }),
+      ]);
+      setTreasuryEthBalance(ethBal as bigint);
+      setTreasuryMctBalance(mctBal as bigint);
+    } catch {
+      // ignore
+    }
+  }
+
+  async function withdrawEthFromTreasury() {
+    if (!walletClient || !publicClient || !deployment || !address) return;
+    if (treasuryEthBalance <= BigInt(0)) return;
+    try {
+      setStatus('⏳ Preflighting withdraw...');
+      await publicClient.simulateContract({
+        address: deployment.contracts.TreasuryManager,
+        abi: TreasuryManagerAbi,
+        functionName: 'withdraw',
+        args: [treasuryEthBalance],
+        account: address as any,
+      });
+
+      setStatus('⏳ Withdrawing ETH (confirm in wallet)...');
+      const hash = await walletClient.writeContract({
+        address: deployment.contracts.TreasuryManager,
+        abi: TreasuryManagerAbi,
+        functionName: 'withdraw',
+        args: [treasuryEthBalance],
+      });
+      setStatus(`⏳ withdraw tx sent: ${hash}. Waiting for confirmation...`);
+      await publicClient.waitForTransactionReceipt({ hash });
+      await refreshTreasuryBalances();
+      setStatus('✅ Withdrawn to wallet.');
+    } catch (e: any) {
+      const msg = e?.shortMessage || e?.message || String(e);
+      setStatus('❌ Withdraw failed: ' + msg);
+    }
+  }
+
+  async function withdrawMctFromTreasury() {
+    if (!walletClient || !publicClient || !deployment || !address) return;
+    if (treasuryMctBalance <= BigInt(0)) return;
+    try {
+      setStatus('⏳ Preflighting withdrawToken...');
+      await publicClient.simulateContract({
+        address: deployment.contracts.TreasuryManager,
+        abi: TreasuryManagerAbi,
+        functionName: 'withdrawToken',
+        args: [deployment.contracts.MockToken, treasuryMctBalance],
+        account: address as any,
+      });
+
+      setStatus('⏳ Withdrawing MCT (confirm in wallet)...');
+      const hash = await walletClient.writeContract({
+        address: deployment.contracts.TreasuryManager,
+        abi: TreasuryManagerAbi,
+        functionName: 'withdrawToken',
+        args: [deployment.contracts.MockToken, treasuryMctBalance],
+      });
+      setStatus(`⏳ withdrawToken tx sent: ${hash}. Waiting for confirmation...`);
+      await publicClient.waitForTransactionReceipt({ hash });
+      await refreshTreasuryBalances();
+      setStatus('✅ Withdrawn to wallet.');
+    } catch (e: any) {
+      const msg = e?.shortMessage || e?.message || String(e);
+      setStatus('❌ Withdraw failed: ' + msg);
+    }
   }
 
   function playAgain() {
@@ -536,6 +632,35 @@ export default function DicePage() {
                       <span className="text-green-300 text-lg font-bold">{outcomeView.payoutAmount?.toString()} wei</span>
                     </div>
                   )}
+                </div>
+              </div>
+
+              <div className="bg-black/40 p-4 rounded-lg border-2 border-gray-700">
+                <div className="font-game text-sm mb-3 text-gray-200">Treasury Balances (Claim to Wallet)</div>
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="flex items-center justify-between bg-black/30 p-3 rounded">
+                    <div className="text-gray-300">ETH in Treasury</div>
+                    <div className="font-mono text-xs text-yellow-300">{formatEther(treasuryEthBalance)} ETH</div>
+                  </div>
+                  <button
+                    className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-400 hover:to-cyan-400 text-white font-pixel text-xl py-4 rounded-lg shadow-lg transform hover:scale-105 transition-all disabled:opacity-50"
+                    onClick={withdrawEthFromTreasury}
+                    disabled={!address || treasuryEthBalance === BigInt(0)}
+                  >
+                    Withdraw ETH to Wallet
+                  </button>
+
+                  <div className="flex items-center justify-between bg-black/30 p-3 rounded">
+                    <div className="text-gray-300">MCT in Treasury</div>
+                    <div className="font-mono text-xs text-yellow-300">{formatEther(treasuryMctBalance)} MCT</div>
+                  </div>
+                  <button
+                    className="w-full bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-400 hover:to-pink-400 text-white font-pixel text-xl py-4 rounded-lg shadow-lg transform hover:scale-105 transition-all disabled:opacity-50"
+                    onClick={withdrawMctFromTreasury}
+                    disabled={!address || treasuryMctBalance === BigInt(0)}
+                  >
+                    Withdraw MCT to Wallet
+                  </button>
                 </div>
               </div>
 
